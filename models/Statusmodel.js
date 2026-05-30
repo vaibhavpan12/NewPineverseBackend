@@ -53,6 +53,7 @@ StatusSchema.pre("findOneAndUpdate", function (next) {
         if (!this._update.$push) {
             this._update.$push = {};
         }
+        
         this._update.$push.statusHistory = { status, timestamp: now };
 
         switch (status) {
@@ -95,4 +96,4 @@ StatusSchema.pre("findOneAndUpdate", function (next) {
     next();
 });
 
-export default mongoose.model("Status", StatusSchema);
+export default mongoose.model("Status", StatusSchema);

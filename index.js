@@ -1661,8 +1661,10 @@ import notificationroute from "./routes/notificationroute.js";
 import fcmTokenRoutes from "./routes/fcmTokenRoutes.js";
 import Payment from "./routes/PaymentRoute.js";
 import UserSubscriptionRoutes from "./routes/UserSubscriptionRoutes.js";
+
 import { sendNotificationToUsers } from "./services/pushNotificationService.js";
 import { verifyFirebaseCredentials } from "./utils/firebase.js";
+import UsersPlan from './routes/subscriptionPlanRoutes.js'
 // import socketRoutes from "./routes/socketRoutes.js";
 // import { setSocketInstance } from "./controllers/socketController.js";
 
@@ -1676,7 +1678,11 @@ const io = new Server(server, {
 await connectDB();
 await verifyFirebaseCredentials();
 
+// ✅ Attach io to app so controllers can access it
+app.set('io', io);
+
 app.use(cors());
+app.use(express.json()); // ← ye hona chahiye
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 //app.use("/api/socket", socketRoutes);
@@ -1785,10 +1791,16 @@ app.use("/api", bidRoutes);
 app.use("/api", reviewRoutes);
 app.use("/api", locationRoutes);
 app.use("/api", UserSubscriptionRoutes);
+app.use("/api", UsersPlan)
+
+
+
+//add new api routes
 app.use("/api", countRoutes);
 app.use("/api", transactionRoutes);
 app.use("/api", SkipRoute);
 app.use("/api", statusRoutes);
+
 app.use("/api", fcmTokenRoutes);
 app.use("/api", notificationroute);
 app.use("/api", Payment);
@@ -1983,57 +1995,57 @@ app.post("/updatePaymentStatus", async (req, res) => {
     }
 });
 
-app.get("/getPaymentStatus", async (req, res) => {
-    const { senderId, receiverId, bidId } = req.query; // ✅ bidId added
-    try {
-        // ✅ Base query
-        const baseQuery = {
-            $or: [
-                { senderId, receiverId },
-                { senderId: receiverId, receiverId: senderId },
-            ],
-        };
+// app.get("/getPaymentStatus", async (req, res) => {
+//     const { senderId, receiverId, bidId } = req.query; // ✅ bidId added
+//     try {
+//         // ✅ Base query
+//         const baseQuery = {
+//             $or: [
+//                 { senderId, receiverId },
+//                 { senderId: receiverId, receiverId: senderId },
+//             ],
+//         };
 
-        // ✅ bidId available ho toh sirf us bid ka payment status fetch karo
-        if (bidId) {
-            baseQuery["meta.bidId"] = bidId;
-        }
+//         // ✅ bidId available ho toh sirf us bid ka payment status fetch karo
+//         if (bidId) {
+//             baseQuery["meta.bidId"] = bidId;
+//         }
 
-        const messages = await Message.find(baseQuery).select(
-            "paymentStatus senderId receiverId meta -_id",
-        );
+//         const messages = await Message.find(baseQuery).select(
+//             "paymentStatus senderId receiverId meta -_id",
+//         );
 
-        if (!messages.length)
-            return res.status(404).json({ error: "No payment status found" });
+//         if (!messages.length)
+//             return res.status(404).json({ error: "No payment status found" });
 
-        const senderToReceiver = messages.find(
-            (m) => m.senderId === senderId && m.receiverId === receiverId,
-        );
-        const receiverToSender = messages.find(
-            (m) => m.senderId === receiverId && m.receiverId === senderId,
-        );
+//         const senderToReceiver = messages.find(
+//             (m) => m.senderId === senderId && m.receiverId === receiverId,
+//         );
+//         const receiverToSender = messages.find(
+//             (m) => m.senderId === receiverId && m.receiverId === senderId,
+//         );
 
-        res.json({
-            senderToReceiver: senderToReceiver
-                ? {
-                    senderId: senderToReceiver.senderId,
-                    receiverId: senderToReceiver.receiverId,
-                    paymentStatus: senderToReceiver.paymentStatus,
-                }
-                : null,
-            receiverToSender: receiverToSender
-                ? {
-                    senderId: receiverToSender.senderId,
-                    receiverId: receiverToSender.receiverId,
-                    paymentStatus: receiverToSender.paymentStatus,
-                }
-                : null,
-        });
-    } catch (err) {
-        console.error("❌ Error fetching paymentStatus:", err.message);
-        res.status(500).json({ error: "Failed to fetch paymentStatus" });
-    }
-});
+//         res.json({
+//             senderToReceiver: senderToReceiver
+//                 ? {
+//                     senderId: senderToReceiver.senderId,
+//                     receiverId: senderToReceiver.receiverId,
+//                     paymentStatus: senderToReceiver.paymentStatus,
+//                 }
+//                 : null,
+//             receiverToSender: receiverToSender
+//                 ? {
+//                     senderId: receiverToSender.senderId,
+//                     receiverId: receiverToSender.receiverId,
+//                     paymentStatus: receiverToSender.paymentStatus,
+//                 }
+//                 : null,
+//         });
+//     } catch (err) {
+//         console.error("❌ Error fetching paymentStatus:", err.message);
+//         res.status(500).json({ error: "Failed to fetch paymentStatus" });
+//     }
+// });
 // ========== SOCKET.IO ==========
 io.on("connection", (socket) => {
     console.log(`🟢 User connected: ${socket.id}`);
@@ -2895,6 +2907,64 @@ app.post("/unreadCounts", async (req, res) => {
 //   }
 // });
 
+app.get("/getPaymentStatus", async (req, res) => {
+    const { senderId, receiverId, bidId } = req.query;
+    try {
+        const baseQuery = {
+            $or: [
+                { senderId, receiverId },
+                { senderId: receiverId, receiverId: senderId },
+            ],
+        };
+
+        // ✅ KEY FIX: bidId scope — purani bid ki payment na aaye
+        if (bidId) {
+            baseQuery["meta.bidId"] = bidId;
+        }
+
+        const messages = await Message.find(baseQuery).select(
+            "paymentStatus senderId receiverId meta -_id",
+        );
+
+        // ✅ Agar koi message nahi mila is bidId ke liye — pending return karo
+        if (!messages.length) {
+            return res.json({
+                senderToReceiver: { senderId, receiverId, paymentStatus: "pending" },
+                receiverToSender: { senderId: receiverId, receiverId: senderId, paymentStatus: "pending" },
+            });
+        }
+
+        const senderToReceiver = messages.find(
+            (m) => m.senderId === senderId && m.receiverId === receiverId,
+        );
+        const receiverToSender = messages.find(
+            (m) => m.senderId === receiverId && m.receiverId === senderId,
+        );
+
+        res.json({
+            senderToReceiver: senderToReceiver
+                ? {
+                    senderId: senderToReceiver.senderId,
+                    receiverId: senderToReceiver.receiverId,
+                    paymentStatus: senderToReceiver.paymentStatus,
+                }
+                : { senderId, receiverId, paymentStatus: "pending" }, // ✅ null ki jagah pending
+            receiverToSender: receiverToSender
+                ? {
+                    senderId: receiverToSender.senderId,
+                    receiverId: receiverToSender.receiverId,
+                    paymentStatus: receiverToSender.paymentStatus,
+                }
+                : { senderId: receiverId, receiverId: senderId, paymentStatus: "pending" }, // ✅ null ki jagah pending
+        });
+    } catch (err) {
+        console.error("❌ Error fetching paymentStatus:", err.message);
+        res.status(500).json({ error: "Failed to fetch paymentStatus" });
+    }
+});
+
+
+
 app.post("/addAmountHistory", async (req, res) => {
     const { senderId, receiverId, amount, addedBy, bidId } = req.body; // ✅ bidId added
     try {
@@ -3072,6 +3142,122 @@ app.post("/clearAmountHistory", async (req, res) => {
 // Place this AFTER the existing socket.on('mark_as_read', ...) block and BEFORE socket.on('disconnect', ...)
 
 // ✅ REALTIME DEAL ACCEPTANCE - broadcasts to BOTH sender and receiver
+
+// ========== TEST PUSH NOTIFICATION ENDPOINT ==========
+app.post("/api/test-push-notification", async (req, res) => {
+    try {
+        const { userId = "test-user", title = "Test Notification", body = "This is a test push notification" } = req.body;
+
+        if (!userId) {
+            return res.status(400).json({ success: false, message: "userId is required" });
+        }
+
+        const result = await sendNotificationToUsers({
+            userIds: [String(userId)],
+            title,
+            body,
+            senderId: "system",
+            eventType: "test",
+            data: { type: "test_notification", timestamp: new Date().toISOString() }
+        });
+
+        res.json({
+            success: true,
+            message: "Test notification sent",
+            result
+        });
+    } catch (err) {
+        console.error("❌ Test push error:", err.message);
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// ========== HEALTH CHECK ENDPOINT ==========
+app.get("/api/health", async (req, res) => {
+    try {
+        const health = {
+            status: "ok",
+            timestamp: new Date().toISOString(),
+            services: {
+                database: "checking...",
+                firebase: "checking...",
+                socketio: "ok"
+            }
+        };
+
+        // Check database
+        try {
+            const User = mongoose.model("User");
+            await User.findOne().lean();
+            health.services.database = "✅ connected";
+        } catch (e) {
+            health.services.database = `❌ ${e.message}`;
+        }
+
+        // Check Firebase
+        try {
+            await admin.app().options.credential.getAccessToken();
+            health.services.firebase = "✅ credentials valid";
+        } catch (e) {
+            health.services.firebase = `❌ ${e.message}`;
+        }
+
+        // Check Socket.io
+        health.services.socketio = req.app.get('io') ? "✅ attached" : "❌ not attached";
+
+        res.json(health);
+    } catch (err) {
+        res.status(500).json({ status: "error", message: err.message });
+    }
+});
+
+// ========== FIREBASE DIAGNOSTIC ENDPOINT ==========
+app.get("/api/firebase-info", (req, res) => {
+    try {
+        const projectId = process.env.FIREBASE_PROJECT_ID;
+        const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+
+        res.json({
+            status: "ok",
+            firebase: {
+                projectId,
+                clientEmail,
+                hasPrivateKey: !!process.env.FIREBASE_PRIVATE_KEY,
+                message: "These are the Firebase credentials the server is using"
+            },
+            instructions: {
+                problem: "SenderId mismatch - client and server use different Firebase projects",
+                solution: [
+                    "1. Go to Firebase Console → Project Settings",
+                    "2. Copy Project ID from this endpoint (shown above)",
+                    "3. Ensure client app's google-services.json has SAME Project ID",
+                    "4. Rebuild/reinstall client app",
+                    "5. Clear app data and re-register FCM token",
+                    "6. Try sending notification again"
+                ]
+            }
+        });
+    } catch (err) {
+        res.status(500).json({ status: "error", message: err.message });
+    }
+});
+
+// ========== CLEAR ALL FCM TOKENS (FOR RESET) ==========
+app.delete("/api/fcm-token/clear-all/admin", async (req, res) => {
+    try {
+        // Optional: Add auth check here
+        const result = await mongoose.model("FcmToken").deleteMany({});
+
+        res.json({
+            success: true,
+            message: "All FCM tokens cleared",
+            deletedCount: result.deletedCount,
+            instructions: "Users need to re-register their FCM tokens with the correct Firebase project"
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
 
 // ========== START SERVER ==========
 const PORT = process.env.PORT || 5000;

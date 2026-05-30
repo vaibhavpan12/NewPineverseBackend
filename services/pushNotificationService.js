@@ -5,6 +5,7 @@ import PushNotification from "../models/PushNotificationModel.js";
 const INVALID_TOKEN_ERRORS = new Set([
   "messaging/invalid-registration-token",
   "messaging/registration-token-not-registered",
+  "messaging/mismatched-credential",
 ]);
 
 const toUniqueStrings = (values = []) => {
@@ -113,6 +114,21 @@ const sendToTokens = async ({ tokenDocs, title, body, data = {} }) => {
         console.error(
           "❌ Firebase Admin JWT/service account invalid (same check as startup). Generate a new private key in Firebase Console and update utils/serviceAccountKey.json or FIREBASE_SERVICE_ACCOUNT_* env vars.",
         );
+      } else if (code === "messaging/mismatched-credential") {
+        console.error(
+          "❌ SenderId Mismatch! FCM token was registered with a DIFFERENT Firebase project than the server is using.",
+        );
+        console.error(
+          "   Fix: Make sure client app and server use the SAME Firebase project",
+        );
+        console.error(
+          "   1. Check client app's google-services.json / GoogleService-Info.plist",
+        );
+        console.error(
+          "   2. Verify it matches server's Firebase Project ID:",
+          process.env.FIREBASE_PROJECT_ID,
+        );
+        console.error("   3. Clear app data and re-register FCM token");
       } else {
         console.warn("FCM failure", {
           userId,
@@ -167,6 +183,7 @@ export const sendNotificationToUsers = async ({
         eventType,
         senderId,
         targetUserIds,
+        reason: "Clients haven't registered their FCM tokens. Make sure app calls POST /api/fcm-token on startup",
       });
     }
 

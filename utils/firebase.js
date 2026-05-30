@@ -95,6 +95,7 @@ if (!admin.apps.length) {
   });
 
   console.log("✅ Firebase Admin Initialized");
+  console.log(`📱 Firebase Project: ${serviceAccount.projectId}`);
 }
 
 /** Verify credentials on startup */
@@ -111,6 +112,11 @@ export async function verifyFirebaseCredentials() {
     );
 
     console.error("   ", e.message);
+    console.error(
+      "   Fix: Check these environment variables are set correctly:",
+      "FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY",
+    );
+    throw new Error("Firebase credentials verification failed. Push notifications disabled.");
   }
 }
 

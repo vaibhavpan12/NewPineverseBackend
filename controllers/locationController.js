@@ -2206,6 +2206,47 @@ export const getAllCountsLocations = async (req, res) => {
 // ============================================================
 // GET LOCATIONS (PAGINATED)
 // ============================================================
+// export const getLocations = async (req, res) => {
+//   try {
+//     let { page = 1, limit = 5 } = req.query;
+
+//     page = parseInt(page);
+//     limit = parseInt(limit);
+//     if (page < 1) page = 1;
+//     if (limit < 1) limit = 5;
+
+//     const skip = (page - 1) * limit;
+
+//     const locations = await Location.find()
+//       .sort({ createdAt: -1 })
+//       .skip(skip)
+//       .limit(limit);
+
+//     const locationsWithBidCount = await Promise.all(
+//       locations.map(async (loc) => {
+//         const bidCount = await Bid.countDocuments({ jobId: loc._id });
+//         return { ...loc._doc, bidCount };
+//       })
+//     );
+
+//     const total = await Location.countDocuments();
+
+//     res.status(200).json({
+//       success: true,
+//       count: locationsWithBidCount.length,
+//       total,
+//       page,
+//       totalPages: Math.ceil(total / limit),
+//       data: locationsWithBidCount,
+//     });
+
+
+//   } catch (error) {
+//     res.status(500).json({ success: false, message: error.message });
+//   }
+// };
+
+
 export const getLocations = async (req, res) => {
   try {
     let { page = 1, limit = 5 } = req.query;
@@ -2224,8 +2265,25 @@ export const getLocations = async (req, res) => {
 
     const locationsWithBidCount = await Promise.all(
       locations.map(async (loc) => {
-        const bidCount = await Bid.countDocuments({ jobId: loc._id });
-        return { ...loc._doc, bidCount };
+        // ✅ सभी bids fetch करो उस job की
+        const bids = await Bid.find({ jobId: loc._id });
+
+        const bidCount = bids.length;
+
+        // ✅ हर bid का bidderId निकालो (duplicates हटाकर)
+        const bidUserIds = [
+          ...new Set(
+            bids
+              .map((bid) => bid.bidderId?.toString())
+              .filter(Boolean)
+          ),
+        ];
+
+        return {
+          ...loc._doc,
+          bidCount,
+          bidUserIds, // 👈 यह नई field add हुई
+        };
       })
     );
 
@@ -2239,10 +2297,12 @@ export const getLocations = async (req, res) => {
       totalPages: Math.ceil(total / limit),
       data: locationsWithBidCount,
     });
+
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
 
 // ============================================================
 // GET LOCATION BY ID
