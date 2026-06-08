@@ -2964,7 +2964,6 @@ app.get("/getPaymentStatus", async (req, res) => {
 });
 
 
-
 app.post("/addAmountHistory", async (req, res) => {
     const { senderId, receiverId, amount, addedBy, bidId } = req.body; // ✅ bidId added
     try {

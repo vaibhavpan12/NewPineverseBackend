@@ -16,7 +16,7 @@
 //     },
 
 //     jobName: { type: String }, // Added from payload
-  
+
 //     costBreakdown: {
 //       baseTransport: {
 //         type: Number,
@@ -269,6 +269,7 @@ const bidSchema = new mongoose.Schema(
       default: '7 Days',
       required: true,
     },
+
     advancePayment: {
       type: Number,
       min: 0,
@@ -276,6 +277,7 @@ const bidSchema = new mongoose.Schema(
       default: 0,
       required: true,
     },
+
     noteToCustomer: {
       type: String,
       maxlength: 500,
@@ -452,6 +454,23 @@ const bidSchema = new mongoose.Schema(
       enum: ['In Progress', 'Quote Sent', 'Cancelled', 'Completed', 'Rejected', 'Under Negotiation'],
       default: 'In Progress',
     },
+
+    AdvancePaidPayment: {
+      type: Number,
+      default: 0
+    },
+
+    PendingPayment: {
+      type: Number,
+      default: 0
+    },
+
+    fullPaymentStatus: {
+      type: String,
+      enum: ['pending', 'hold', 'paid'],
+      default: 'pending',
+    }
+
   },
   { timestamps: true }
 );
