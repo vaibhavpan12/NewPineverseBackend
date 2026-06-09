@@ -284,6 +284,13 @@ const PaymentSchema = new mongoose.Schema(
             type: Date,
             default: null,
         },
+
+        AdvancePayment: {
+            type: Number,
+            default: 0
+        }
+
+
     },
     { timestamps: true }
 );

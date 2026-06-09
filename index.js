@@ -1792,6 +1792,7 @@ app.use("/api", reviewRoutes);
 app.use("/api", locationRoutes);
 app.use("/api", UserSubscriptionRoutes);
 app.use("/api", UsersPlan)
+app.use("/api", Payment);
 
 
 
@@ -1803,7 +1804,6 @@ app.use("/api", statusRoutes);
 
 app.use("/api", fcmTokenRoutes);
 app.use("/api", notificationroute);
-app.use("/api", Payment);
 // ========== Mongoose Message Schema (with caption & activeStatus & negotiateAmount) ==========
 const attachmentSchema = new mongoose.Schema(
     {
