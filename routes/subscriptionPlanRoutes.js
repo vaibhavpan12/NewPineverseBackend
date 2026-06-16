@@ -4,7 +4,8 @@ import {
     createPlan,
     deletePlan,
     getPlanById, 
-    getPlandata
+    getPlandata,
+    reactivatePlan
 } from '../controllers/subscriptionPlanController.js';
 
 const router = express.Router();
@@ -18,5 +19,6 @@ router.get('/getAllPlans', getPlandata);
 router.get('/getPlanById', getPlanById)
 // Delete Plan
 router.delete('/deletePlan/:id', deletePlan);
+router.patch('/reactivatePlan/:id', reactivatePlan);
 
 export default router;

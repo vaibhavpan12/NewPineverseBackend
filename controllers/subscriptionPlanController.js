@@ -13,6 +13,7 @@ export const createPlan = async (req, res) => {
             data: plan,
         });
     } catch (error) {
+         console.log("ERROR =>", error);
         res.status(500).json({
             success: false,
             message: error.message,
@@ -106,10 +107,37 @@ export const updatePlan = async (req, res) => {
 /**
  * Delete Plan
  */
+// export const deletePlan = async (req, res) => {
+//     try {
+//         const plan = await SubscriptionPlan.findByIdAndDelete(
+//             req.params.id
+//         );
+
+//         if (!plan) {
+//             return res.status(404).json({
+//                 success: false,
+//                 message: 'Plan not found',
+//             });
+//         }
+
+//         res.status(200).json({
+//             success: true,
+//             message: 'Plan deleted successfully',
+//         });
+//     } catch (error) {
+//         res.status(500).json({
+//             success: false,
+//             message: error.message,
+//         });
+//     }
+// };
+
 export const deletePlan = async (req, res) => {
     try {
-        const plan = await SubscriptionPlan.findByIdAndDelete(
-            req.params.id
+        const plan = await SubscriptionPlan.findByIdAndUpdate(
+            req.params.id,
+            { isActive: false },
+            { new: true }
         );
 
         if (!plan) {
@@ -121,7 +149,37 @@ export const deletePlan = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            message: 'Plan deleted successfully',
+            message: 'Plan deactivated successfully',
+            data: plan,
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message,
+        });
+    }
+};
+
+
+export const reactivatePlan = async (req, res) => {
+    try {
+        const plan = await SubscriptionPlan.findByIdAndUpdate(
+            req.params.id,
+            { isActive: true },
+            { new: true }
+        );
+
+        if (!plan) {
+            return res.status(404).json({
+                success: false,
+                message: 'Plan not found',
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'Plan reactivated successfully',
+            data: plan,
         });
     } catch (error) {
         res.status(500).json({

@@ -11,7 +11,7 @@
 //                 message: "user_id, SubSriptionMonths, transactionId, amount are required",
 //             });
 //         }
-        
+
 //         // duplicate transaction check
 //         const existing = await Payment.findOne({ transactionId });
 //         if (existing) {
@@ -42,7 +42,6 @@
 //         });
 //     }
 // };
-
 
 // // ✅ Update Payment Status (Razorpay webhook ya success ke baad)
 // export const updatePaymentStatus = async (req, res) => {
@@ -75,8 +74,6 @@
 //     }
 // };
 
-
-
 // // ✅ Get User Payments
 // export const getUserPayments = async (req, res) => {
 //     try {
@@ -95,8 +92,6 @@
 //         });
 //     }
 // };
-
-
 
 // // ✅ Get Single Payment
 // export const getSinglePayment = async (req, res) => {
@@ -124,8 +119,6 @@
 //     }
 // };
 
-
-
 // // ✅ Delete Payment (optional admin use)
 // export const deletePayment = async (req, res) => {
 //     try {
@@ -144,8 +137,6 @@
 //         });
 //     }
 // };
-
-
 
 // import Payment from "../models/PaymentModel.js";
 // import mongoose from "mongoose";
@@ -588,8 +579,6 @@
 //     }
 // };
 
-
-
 // // ✅ Delete Payment (optional admin use)
 // export const deletePayment = async (req, res) => {
 //     try {
@@ -619,7 +608,6 @@
 //         });
 //     }
 // };
-
 
 // import Payment from "../models/PaymentModel.js";
 // import mongoose from "mongoose";
@@ -1284,29 +1272,9 @@
 //     }
 // };
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import Payment from "../models/PaymentModel.js";
-
+// import Payment from "../models/PaymentModel.js";
+import Transaction from "../models/AllTransaction.js";
 // ════════════════════════════════════════════════════════════════════════════
 //  PURE HELPERS (no DB calls)
 // ════════════════════════════════════════════════════════════════════════════
@@ -1316,21 +1284,26 @@ import Payment from "../models/PaymentModel.js";
  * Returns null for lifetime (0 months) plans.
  */
 const calculateExpiryDate = (subscriptionMonths) => {
-    if (subscriptionMonths === 0) return null;
-    const d = new Date();
-    d.setMonth(d.getMonth() + subscriptionMonths);
-    return d;
+  if (subscriptionMonths === 0) return null;
+  const d = new Date();
+  d.setMonth(d.getMonth() + subscriptionMonths);
+  return d;
 };
 
 /**
  * Derive useSubscriptionStatus from raw fields.
  * Used at creation / status-update time.
  */
-const determineSubscriptionStatus = (status, planType, subMonths, expiryDate) => {
-    if (status !== "success" || planType === "expir") return "Inactive";
-    if (planType === "free" && subMonths === 0) return "Active"; // lifetime
-    if (expiryDate && new Date() < new Date(expiryDate)) return "Active";
-    return "Inactive";
+const determineSubscriptionStatus = (
+  status,
+  planType,
+  subMonths,
+  expiryDate,
+) => {
+  if (status !== "success" || planType === "expir") return "Inactive";
+  if (planType === "free" && subMonths === 0) return "Active"; // lifetime
+  if (expiryDate && new Date() < new Date(expiryDate)) return "Active";
+  return "Inactive";
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1349,50 +1322,53 @@ const determineSubscriptionStatus = (status, planType, subMonths, expiryDate) =>
  *   >0  → days to restore
  */
 const pauseActiveSubscription = async (user_id) => {
-    try {
-        const now = new Date();
+  try {
+    const now = new Date();
 
-        const activePayment = await Payment.findOne({
-            user_id,
-            status: "success",
-            useSubscriptionStatus: "Active",
-            planType: { $in: ["free", "paid"] },
-        }).sort({ createdAt: -1 });
+    const activePayment = await Payment.findOne({
+      user_id,
+      status: "success",
+      useSubscriptionStatus: "Active",
+      planType: { $in: ["free", "paid"] },
+    }).sort({ createdAt: -1 });
 
-        if (!activePayment) return null;
+    if (!activePayment) return null;
 
-        let remainingDaysAtPause = 0;
+    let remainingDaysAtPause = 0;
 
-        if (activePayment.planType === "free" && activePayment.SubSriptionMonths === 0) {
-            // Lifetime — special sentinel value
-            remainingDaysAtPause = -1;
-        } else if (activePayment.expiryDate) {
-            remainingDaysAtPause = Math.max(
-                0,
-                Math.ceil(
-                    (new Date(activePayment.expiryDate) - now) / (1000 * 60 * 60 * 24)
-                )
-            );
-        }
-
-        await Payment.findByIdAndUpdate(activePayment._id, {
-            $set: {
-                useSubscriptionStatus: "Paused",
-                remainingDaysAtPause,
-                pausedAt: now,
-            },
-        });
-
-        console.info(
-            `[pauseActiveSubscription] txn=${activePayment.transactionId} ` +
-            `paused with ${remainingDaysAtPause} days remaining`
-        );
-
-        return activePayment;
-    } catch (err) {
-        console.error("[pauseActiveSubscription] error:", err.message);
-        return null;
+    if (
+      activePayment.planType === "free" &&
+      activePayment.SubSriptionMonths === 0
+    ) {
+      // Lifetime — special sentinel value
+      remainingDaysAtPause = -1;
+    } else if (activePayment.expiryDate) {
+      remainingDaysAtPause = Math.max(
+        0,
+        Math.ceil(
+          (new Date(activePayment.expiryDate) - now) / (1000 * 60 * 60 * 24),
+        ),
+      );
     }
+
+    await Payment.findByIdAndUpdate(activePayment._id, {
+      $set: {
+        useSubscriptionStatus: "Paused",
+        remainingDaysAtPause,
+        pausedAt: now,
+      },
+    });
+
+    console.info(
+      `[pauseActiveSubscription] txn=${activePayment.transactionId} ` +
+        `paused with ${remainingDaysAtPause} days remaining`,
+    );
+
+    return activePayment;
+  } catch (err) {
+    console.error("[pauseActiveSubscription] error:", err.message);
+    return null;
+  }
 };
 
 /**
@@ -1404,81 +1380,83 @@ const pauseActiveSubscription = async (user_id) => {
  *   • remainingDaysAtPause  >  0  → set new expiryDate = today + remaining days
  */
 const reactivatePausedSubscription = async (user_id) => {
-    try {
-        const now = new Date();
+  try {
+    const now = new Date();
 
-        const pausedPayment = await Payment.findOne({
-            user_id,
-            status: "success",
-            useSubscriptionStatus: "Paused",
-        }).sort({ pausedAt: -1 }); // most recently paused first
+    const pausedPayment = await Payment.findOne({
+      user_id,
+      status: "success",
+      useSubscriptionStatus: "Paused",
+    }).sort({ pausedAt: -1 }); // most recently paused first
 
-        if (!pausedPayment) return null;
+    if (!pausedPayment) return null;
 
-        // ── No time left → permanently inactive ──────────────────────────────
-        if (pausedPayment.remainingDaysAtPause === 0) {
-            await Payment.findByIdAndUpdate(pausedPayment._id, {
-                $set: { useSubscriptionStatus: "Inactive" },
-            });
-            console.info(
-                `[reactivatePausedSubscription] txn=${pausedPayment.transactionId} ` +
-                `has 0 remaining days → marked Inactive`
-            );
-            return null;
-        }
-
-        // ── Lifetime free plan ────────────────────────────────────────────────
-        if (pausedPayment.remainingDaysAtPause === -1) {
-            const reactivated = await Payment.findByIdAndUpdate(
-                pausedPayment._id,
-                {
-                    $set: {
-                        useSubscriptionStatus: "Active",
-                        expiryDate: null,
-                        reactivatedAt: now,
-                        remainingDaysAtPause: 0, // reset sentinel
-                    },
-                },
-                { new: true }
-            );
-            console.info(
-                `[reactivatePausedSubscription] txn=${pausedPayment.transactionId} ` +
-                `lifetime plan reactivated`
-            );
-            return reactivated;
-        }
-
-        // ── Time-based plan → extend from today ──────────────────────────────
-        const newExpiryDate = new Date(now);
-        newExpiryDate.setDate(newExpiryDate.getDate() + pausedPayment.remainingDaysAtPause);
-
-        const reactivated = await Payment.findByIdAndUpdate(
-            pausedPayment._id,
-            {
-                $set: {
-                    useSubscriptionStatus: "Active",
-                    expiryDate: newExpiryDate,
-                    reactivatedAt: now,
-                    remainingDaysAtPause: 0,
-                    // Restore planType if it was accidentally set to expir
-                    ...(pausedPayment.planType === "expir" && {
-                        planType: pausedPayment.SubSriptionMonths === 0 ? "free" : "paid",
-                    }),
-                },
-            },
-            { new: true }
-        );
-
-        console.info(
-            `[reactivatePausedSubscription] txn=${pausedPayment.transactionId} ` +
-            `reactivated until ${newExpiryDate.toLocaleDateString()}`
-        );
-
-        return reactivated;
-    } catch (err) {
-        console.error("[reactivatePausedSubscription] error:", err.message);
-        return null;
+    // ── No time left → permanently inactive ──────────────────────────────
+    if (pausedPayment.remainingDaysAtPause === 0) {
+      await Payment.findByIdAndUpdate(pausedPayment._id, {
+        $set: { useSubscriptionStatus: "Inactive" },
+      });
+      console.info(
+        `[reactivatePausedSubscription] txn=${pausedPayment.transactionId} ` +
+          `has 0 remaining days → marked Inactive`,
+      );
+      return null;
     }
+
+    // ── Lifetime free plan ────────────────────────────────────────────────
+    if (pausedPayment.remainingDaysAtPause === -1) {
+      const reactivated = await Payment.findByIdAndUpdate(
+        pausedPayment._id,
+        {
+          $set: {
+            useSubscriptionStatus: "Active",
+            expiryDate: null,
+            reactivatedAt: now,
+            remainingDaysAtPause: 0, // reset sentinel
+          },
+        },
+        { new: true },
+      );
+      console.info(
+        `[reactivatePausedSubscription] txn=${pausedPayment.transactionId} ` +
+          `lifetime plan reactivated`,
+      );
+      return reactivated;
+    }
+
+    // ── Time-based plan → extend from today ──────────────────────────────
+    const newExpiryDate = new Date(now);
+    newExpiryDate.setDate(
+      newExpiryDate.getDate() + pausedPayment.remainingDaysAtPause,
+    );
+
+    const reactivated = await Payment.findByIdAndUpdate(
+      pausedPayment._id,
+      {
+        $set: {
+          useSubscriptionStatus: "Active",
+          expiryDate: newExpiryDate,
+          reactivatedAt: now,
+          remainingDaysAtPause: 0,
+          // Restore planType if it was accidentally set to expir
+          ...(pausedPayment.planType === "expir" && {
+            planType: pausedPayment.SubSriptionMonths === 0 ? "free" : "paid",
+          }),
+        },
+      },
+      { new: true },
+    );
+
+    console.info(
+      `[reactivatePausedSubscription] txn=${pausedPayment.transactionId} ` +
+        `reactivated until ${newExpiryDate.toLocaleDateString()}`,
+    );
+
+    return reactivated;
+  } catch (err) {
+    console.error("[reactivatePausedSubscription] error:", err.message);
+    return null;
+  }
 };
 
 /**
@@ -1488,47 +1466,47 @@ const reactivatePausedSubscription = async (user_id) => {
  * Call this at the start of every GET endpoint so data is always fresh.
  */
 const autoExpireAndReactivate = async (user_id) => {
-    try {
-        const now = new Date();
+  try {
+    const now = new Date();
 
-        // ── 1. Expire stale FREE 3-month plans ───────────────────────────────
-        await Payment.updateMany(
-            {
-                user_id,
-                planType: "free",
-                SubSriptionMonths: 3,
-                status: "success",
-                useSubscriptionStatus: "Active",
-                expiryDate: { $lt: now },
-            },
-            { $set: { planType: "expir", useSubscriptionStatus: "Inactive" } }
-        );
+    // ── 1. Expire stale FREE 3-month plans ───────────────────────────────
+    await Payment.updateMany(
+      {
+        user_id,
+        planType: "free",
+        SubSriptionMonths: 3,
+        status: "success",
+        useSubscriptionStatus: "Active",
+        expiryDate: { $lt: now },
+      },
+      { $set: { planType: "expir", useSubscriptionStatus: "Inactive" } },
+    );
 
-        // ── 2. Expire stale PAID plans ────────────────────────────────────────
-        await Payment.updateMany(
-            {
-                user_id,
-                planType: "paid",
-                status: "success",
-                useSubscriptionStatus: "Active",
-                expiryDate: { $lt: now },
-            },
-            { $set: { planType: "expir", useSubscriptionStatus: "Inactive" } }
-        );
+    // ── 2. Expire stale PAID plans ────────────────────────────────────────
+    await Payment.updateMany(
+      {
+        user_id,
+        planType: "paid",
+        status: "success",
+        useSubscriptionStatus: "Active",
+        expiryDate: { $lt: now },
+      },
+      { $set: { planType: "expir", useSubscriptionStatus: "Inactive" } },
+    );
 
-        // ── 3. If nothing is Active now, try to restore a Paused sub ─────────
-        const hasActive = await Payment.exists({
-            user_id,
-            status: "success",
-            useSubscriptionStatus: "Active",
-        });
+    // ── 3. If nothing is Active now, try to restore a Paused sub ─────────
+    const hasActive = await Payment.exists({
+      user_id,
+      status: "success",
+      useSubscriptionStatus: "Active",
+    });
 
-        if (!hasActive) {
-            await reactivatePausedSubscription(user_id);
-        }
-    } catch (err) {
-        console.error("[autoExpireAndReactivate] error:", err.message);
+    if (!hasActive) {
+      await reactivatePausedSubscription(user_id);
     }
+  } catch (err) {
+    console.error("[autoExpireAndReactivate] error:", err.message);
+  }
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1540,86 +1518,86 @@ const autoExpireAndReactivate = async (user_id) => {
  * isActive, daysRemaining, expiryMessage, useSubscriptionStatus
  */
 const enrichPaymentObject = (paymentObj) => {
-    const now = new Date();
+  const now = new Date();
 
-    // Expired plan
-    if (paymentObj.planType === "expir") {
-        return {
-            ...paymentObj,
-            isActive: false,
-            daysRemaining: 0,
-            useSubscriptionStatus: "Inactive",
-            expiryMessage: paymentObj.expiryDate
-                ? `Plan expired on ${new Date(paymentObj.expiryDate).toLocaleDateString()}`
-                : "Plan expired",
-        };
-    }
-
-    // Paused plan
-    if (paymentObj.useSubscriptionStatus === "Paused") {
-        const remaining =
-            paymentObj.remainingDaysAtPause === -1
-                ? "Lifetime"
-                : paymentObj.remainingDaysAtPause;
-        return {
-            ...paymentObj,
-            isActive: false,
-            daysRemaining: remaining,
-            expiryMessage: `Paused — ${
-                remaining === "Lifetime"
-                    ? "lifetime plan will be restored when current plan ends"
-                    : `${remaining} days will be restored when current plan ends`
-            }`,
-        };
-    }
-
-    if (paymentObj.status !== "success") {
-        return {
-            ...paymentObj,
-            isActive: false,
-            daysRemaining: 0,
-            expiryMessage: `Payment status: ${paymentObj.status}`,
-            useSubscriptionStatus: "Inactive",
-        };
-    }
-
-    // Lifetime free plan
-    if (paymentObj.planType === "free" && paymentObj.SubSriptionMonths === 0) {
-        return {
-            ...paymentObj,
-            isActive: true,
-            daysRemaining: "Lifetime",
-            expiryMessage: "Free plan — never expires",
-            useSubscriptionStatus: "Active",
-        };
-    }
-
-    // Time-based plan
-    if (paymentObj.expiryDate) {
-        const isActive = now < new Date(paymentObj.expiryDate);
-        const daysRemaining = isActive
-            ? Math.ceil(
-                (new Date(paymentObj.expiryDate) - now) / (1000 * 60 * 60 * 24)
-            )
-            : 0;
-        return {
-            ...paymentObj,
-            isActive,
-            daysRemaining,
-            useSubscriptionStatus: isActive ? "Active" : "Inactive",
-            expiryMessage: isActive
-                ? `Active for ${daysRemaining} more days`
-                : "Subscription expired",
-        };
-    }
-
+  // Expired plan
+  if (paymentObj.planType === "expir") {
     return {
-        ...paymentObj,
-        isActive: false,
-        daysRemaining: 0,
-        expiryMessage: "No expiry date set",
-        useSubscriptionStatus: "Inactive",
+      ...paymentObj,
+      isActive: false,
+      daysRemaining: 0,
+      useSubscriptionStatus: "Inactive",
+      expiryMessage: paymentObj.expiryDate
+        ? `Plan expired on ${new Date(paymentObj.expiryDate).toLocaleDateString()}`
+        : "Plan expired",
     };
+  }
+
+  // Paused plan
+  if (paymentObj.useSubscriptionStatus === "Paused") {
+    const remaining =
+      paymentObj.remainingDaysAtPause === -1
+        ? "Lifetime"
+        : paymentObj.remainingDaysAtPause;
+    return {
+      ...paymentObj,
+      isActive: false,
+      daysRemaining: remaining,
+      expiryMessage: `Paused — ${
+        remaining === "Lifetime"
+          ? "lifetime plan will be restored when current plan ends"
+          : `${remaining} days will be restored when current plan ends`
+      }`,
+    };
+  }
+
+  if (paymentObj.status !== "success") {
+    return {
+      ...paymentObj,
+      isActive: false,
+      daysRemaining: 0,
+      expiryMessage: `Payment status: ${paymentObj.status}`,
+      useSubscriptionStatus: "Inactive",
+    };
+  }
+
+  // Lifetime free plan
+  if (paymentObj.planType === "free" && paymentObj.SubSriptionMonths === 0) {
+    return {
+      ...paymentObj,
+      isActive: true,
+      daysRemaining: "Lifetime",
+      expiryMessage: "Free plan — never expires",
+      useSubscriptionStatus: "Active",
+    };
+  }
+
+  // Time-based plan
+  if (paymentObj.expiryDate) {
+    const isActive = now < new Date(paymentObj.expiryDate);
+    const daysRemaining = isActive
+      ? Math.ceil(
+          (new Date(paymentObj.expiryDate) - now) / (1000 * 60 * 60 * 24),
+        )
+      : 0;
+    return {
+      ...paymentObj,
+      isActive,
+      daysRemaining,
+      useSubscriptionStatus: isActive ? "Active" : "Inactive",
+      expiryMessage: isActive
+        ? `Active for ${daysRemaining} more days`
+        : "Subscription expired",
+    };
+  }
+
+  return {
+    ...paymentObj,
+    isActive: false,
+    daysRemaining: 0,
+    expiryMessage: "No expiry date set",
+    useSubscriptionStatus: "Inactive",
+  };
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1628,253 +1606,300 @@ const enrichPaymentObject = (paymentObj) => {
 
 // ── Create Payment ───────────────────────────────────────────────────────────
 export const createPayment = async (req, res) => {
-    try {
-        const {
-            user_id,
-            SubSriptionMonths,
-            transactionId,
-            amount,
-            status,
-            planType,
-            AdvancePayment,
-        } = req.body;
-
-        // ── Basic validation ─────────────────────────────────────────────────
-        if (!user_id || SubSriptionMonths === undefined || !transactionId) {
-            return res.status(400).json({
-                success: false,
-                message: "user_id, SubSriptionMonths, and transactionId are required",
-            });
-        }
-
-        if (![0, 3, 6, 12].includes(SubSriptionMonths)) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid SubSriptionMonths. Allowed: 0, 3, 6, 12",
-            });
-        }
-
-        let finalPlanType = planType || (SubSriptionMonths === 0 ? "free" : "paid");
-
-        if (planType && !["free", "paid", "expir"].includes(planType)) {
-            return res.status(400).json({
-                success: false,
-                message: "planType must be 'free', 'paid', or 'expir'",
-            });
-        }
-
-        if (finalPlanType === "free" && ![0, 3].includes(SubSriptionMonths)) {
-            return res.status(400).json({
-                success: false,
-                message: "Free plan only supports 0 or 3 months",
-            });
-        }
-
-        if (finalPlanType === "paid" && SubSriptionMonths === 0) {
-            return res.status(400).json({
-                success: false,
-                message: "Paid plan cannot have 0 months",
-            });
-        }
-
-        if (finalPlanType === "paid" && (!amount || amount <= 0)) {
-            return res.status(400).json({
-                success: false,
-                message: "Valid amount is required for paid subscriptions",
-            });
-        }
-
-        if (finalPlanType === "free" && amount && amount > 0) {
-            return res.status(400).json({
-                success: false,
-                message: "Free plan must have amount 0",
-            });
-        }
-
-        // ── Duplicate transaction guard ──────────────────────────────────────
-        const existing = await Payment.findOne({ transactionId });
-        if (existing) {
-            return res.status(400).json({
-                success: false,
-                message: "Transaction already exists",
-            });
-        }
-
-        // ── Subscription history: read BEFORE pausing ────────────────────────
-        // We look at both Active and Paused records to get the correct history.
-        const existingPayment = await Payment.findOne({
-            user_id,
-            status: "success",
-            useSubscriptionStatus: { $in: ["Active", "Paused"] },
-        }).sort({ createdAt: -1 });
-
-        const SubSriptionHistory = existingPayment
-            ? existingPayment.SubSriptionHistory + SubSriptionMonths
-            : SubSriptionMonths;
-
-        // ── If activating now → pause the current active subscription ────────
-        if (status === "success") {
-            await pauseActiveSubscription(user_id);
-        }
-
-        // ── Calculate derived fields ─────────────────────────────────────────
-        const expiryDate    = calculateExpiryDate(SubSriptionMonths);
-        const finalStatus   = status || "pending";
-        const useSubscriptionStatus = determineSubscriptionStatus(
-            finalStatus,
-            finalPlanType,
-            SubSriptionMonths,
-            expiryDate
-        );
-
-        const paymentData = {
-            user_id,
-            SubSriptionMonths,
-            SubSriptionHistory,
-            transactionId,
-            amount: finalPlanType === "free" ? 0 : amount,
-            status: finalStatus,
-            expiryDate,
-            AdvancePayment: AdvancePayment,
-            planType: finalPlanType,
-            useSubscriptionStatus,
-            ...(finalStatus === "success" && { activatedAt: new Date() }),
-        };
-
-        const payment = await Payment.create(paymentData);
-
-        // ── Build response message ────────────────────────────────────────────
-        let successMessage = "Payment created successfully";
-        if (finalPlanType === "free" && SubSriptionMonths === 3) {
-            successMessage =
-                "Free plan activated (3 months). Any previous active plan has been paused.";
-        } else if (finalPlanType === "free" && SubSriptionMonths === 0) {
-            successMessage =
-                "Free lifetime plan activated. Any previous active plan has been paused.";
-        } else if (finalPlanType === "paid") {
-            successMessage =
-                "Paid plan activated. Previous active plan (if any) has been paused and will resume when this plan expires.";
-        }
-
-        return res.status(201).json({
-            success: true,
-            message: successMessage,
-            data: {
-                ...payment.toObject(),
-                expiryMessage:
-                    finalPlanType === "free" && SubSriptionMonths === 0
-                        ? "No expiry for lifetime plan"
-                        : expiryDate
-                        ? `Subscription expires on ${expiryDate.toLocaleDateString()}`
-                        : "No expiry set",
-                amountPaid: finalPlanType === "free" ? 0 : amount,
-            },
-        });
-    } catch (error) {
-        console.error("[createPayment] error:", error.message);
-        return res.status(500).json({ success: false, message: error.message });
+  try {
+    const {
+      user_id,
+      SubSriptionMonths,
+      transactionId,
+      amount,
+      status,
+      planType,
+      AdvancePayment,
+    } = req.body;
+console.log("Payment Request =>", {
+  user_id,
+  SubSriptionMonths,
+  transactionId,
+  amount,
+  status,
+  planType,
+});
+    // ── Basic validation ─────────────────────────────────────────────────
+    if (!user_id || SubSriptionMonths === undefined || !transactionId) {
+      return res.status(400).json({
+        success: false,
+        message: "user_id, SubSriptionMonths, and transactionId are required",
+      });
     }
+
+    // if (![0, 3, 6, 12].includes(SubSriptionMonths)) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Invalid SubSriptionMonths. Allowed: 0, 3, 6, 12",
+    //   });
+    // }
+if (![0, 1, 3, 6, 12].includes(Number(SubSriptionMonths))) {
+  return res.status(400).json({
+    success: false,
+    message: "Invalid SubSriptionMonths. Allowed: 0, 1, 3, 6, 12",
+  });
+}
+    let finalPlanType = planType || (SubSriptionMonths === 0 ? "free" : "paid");
+
+    if (planType && !["free", "paid", "expir"].includes(planType)) {
+      return res.status(400).json({
+        success: false,
+        message: "planType must be 'free', 'paid', or 'expir'",
+      });
+    }
+
+    // if (finalPlanType === "free" && ![0, 3].includes(SubSriptionMonths)) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Free plan only supports 0 or 3 months",
+    //   });
+    // }
+if (finalPlanType === "free" && ![0, 1, 3].includes(Number(SubSriptionMonths))) {
+  return res.status(400).json({
+    success: false,
+    message: "Free plan only supports 0, 1 or 3 months",
+  });
+}
+    if (finalPlanType === "paid" && SubSriptionMonths === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Paid plan cannot have 0 months",
+      });
+    }
+
+    if (finalPlanType === "paid" && (!amount || amount <= 0)) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid amount is required for paid subscriptions",
+      });
+    }
+
+    if (finalPlanType === "free" && amount && amount > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Free plan must have amount 0",
+      });
+    }
+
+    // ── Duplicate transaction guard ──────────────────────────────────────
+    const existing = await Payment.findOne({ transactionId });
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        message: "Transaction already exists",
+      });
+    }
+
+    // ── Subscription history: read BEFORE pausing ────────────────────────
+    // We look at both Active and Paused records to get the correct history.
+    const existingPayment = await Payment.findOne({
+      user_id,
+      status: "success",
+      useSubscriptionStatus: { $in: ["Active", "Paused"] },
+    }).sort({ createdAt: -1 });
+
+    const SubSriptionHistory = existingPayment
+      ? existingPayment.SubSriptionHistory + SubSriptionMonths
+      : SubSriptionMonths;
+
+    // ── If activating now → pause the current active subscription ────────
+    if (status === "success") {
+      await pauseActiveSubscription(user_id);
+    }
+
+    // ── Calculate derived fields ─────────────────────────────────────────
+    const expiryDate = calculateExpiryDate(SubSriptionMonths);
+    const finalStatus = status || "pending";
+    const useSubscriptionStatus = determineSubscriptionStatus(
+      finalStatus,
+      finalPlanType,
+      SubSriptionMonths,
+      expiryDate,
+    );
+
+    const paymentData = {
+      user_id,
+      SubSriptionMonths,
+      SubSriptionHistory,
+      transactionId,
+      amount: finalPlanType === "free" ? 0 : amount,
+      status: finalStatus,
+      expiryDate,
+      AdvancePayment: AdvancePayment,
+      planType: finalPlanType,
+      useSubscriptionStatus,
+      ...(finalStatus === "success" && { activatedAt: new Date() }),
+    };
+
+    const payment = await Payment.create(paymentData);
+    // Save subscription transaction
+    if (finalStatus === "success") {
+    await Transaction.create({
+    customerId: null,
+    vendorId: null,
+
+    bidId: null,
+    loadId: null,
+
+    subscriptionId: payment._id,
+
+    amount: finalPlanType === "free" ? 0 : amount,
+
+    type: "SUBSCRIPTION",
+    paymentStatus: "SUCCESS",
+
+    transactionId,
+
+    razorpayOrderId: req.body.razorpayOrderId || null,
+    razorpayPaymentId: req.body.razorpayPaymentId || null,
+    razorpaySignature: req.body.razorpaySignature || null,
+});
+    }
+    // ── Build response message ────────────────────────────────────────────
+    let successMessage = "Payment created successfully";
+    if (finalPlanType === "free" && SubSriptionMonths === 3) {
+      successMessage =
+        "Free plan activated (3 months). Any previous active plan has been paused.";
+    } else if (finalPlanType === "free" && SubSriptionMonths === 0) {
+      successMessage =
+        "Free lifetime plan activated. Any previous active plan has been paused.";
+    } else if (finalPlanType === "paid") {
+      successMessage =
+        "Paid plan activated. Previous active plan (if any) has been paused and will resume when this plan expires.";
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: successMessage,
+      data: {
+        ...payment.toObject(),
+        expiryMessage:
+          finalPlanType === "free" && SubSriptionMonths === 0
+            ? "No expiry for lifetime plan"
+            : expiryDate
+              ? `Subscription expires on ${expiryDate.toLocaleDateString()}`
+              : "No expiry set",
+        amountPaid: finalPlanType === "free" ? 0 : amount,
+      },
+    });
+  } catch (error) {
+    console.error("[createPayment] error:", error.message);
+    return res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 // ── Update Payment Status ────────────────────────────────────────────────────
 export const updatePaymentStatus = async (req, res) => {
-    try {
-        const { transactionId, status } = req.body;
+  try {
+    const { transactionId, status } = req.body;
 
-        const payment = await Payment.findOne({ transactionId });
-        if (!payment) {
-            return res.status(404).json({ success: false, message: "Payment not found" });
-        }
-
-        const updateData = { status };
-
-        if (status === "success") {
-            updateData.activatedAt = new Date();
-
-            // Pause the current active subscription before activating this one
-            await pauseActiveSubscription(payment.user_id.toString());
-
-            // Recalculate expiry from now (payment is being confirmed now)
-            if (payment.planType === "paid" && payment.SubSriptionMonths > 0) {
-                updateData.expiryDate = calculateExpiryDate(payment.SubSriptionMonths);
-            } else if (payment.planType === "free" && payment.SubSriptionMonths === 3) {
-                updateData.expiryDate = calculateExpiryDate(3);
-            } else if (payment.planType === "free" && payment.SubSriptionMonths === 0) {
-                updateData.expiryDate = null;
-            }
-        }
-
-        updateData.useSubscriptionStatus = determineSubscriptionStatus(
-            status,
-            payment.planType,
-            payment.SubSriptionMonths,
-            updateData.expiryDate ?? payment.expiryDate
-        );
-
-        const updatedPayment = await Payment.findOneAndUpdate(
-            { transactionId },
-            updateData,
-            { new: true }
-        );
-
-        return res.status(200).json({
-            success: true,
-            message: "Payment status updated",
-            data: updatedPayment,
-        });
-    } catch (error) {
-        console.error("[updatePaymentStatus] error:", error.message);
-        return res.status(500).json({ success: false, message: error.message });
+    const payment = await Payment.findOne({ transactionId });
+    if (!payment) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Payment not found" });
     }
+
+    const updateData = { status };
+
+    if (status === "success") {
+      updateData.activatedAt = new Date();
+
+      // Pause the current active subscription before activating this one
+      await pauseActiveSubscription(payment.user_id.toString());
+
+      // Recalculate expiry from now (payment is being confirmed now)
+      if (payment.planType === "paid" && payment.SubSriptionMonths > 0) {
+        updateData.expiryDate = calculateExpiryDate(payment.SubSriptionMonths);
+      } else if (
+        payment.planType === "free" &&
+        payment.SubSriptionMonths === 3
+      ) {
+        updateData.expiryDate = calculateExpiryDate(3);
+      } else if (
+        payment.planType === "free" &&
+        payment.SubSriptionMonths === 0
+      ) {
+        updateData.expiryDate = null;
+      }
+    }
+
+    updateData.useSubscriptionStatus = determineSubscriptionStatus(
+      status,
+      payment.planType,
+      payment.SubSriptionMonths,
+      updateData.expiryDate ?? payment.expiryDate,
+    );
+
+    const updatedPayment = await Payment.findOneAndUpdate(
+      { transactionId },
+      updateData,
+      { new: true },
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Payment status updated",
+      data: updatedPayment,
+    });
+  } catch (error) {
+    console.error("[updatePaymentStatus] error:", error.message);
+    return res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 // ── Get All Payments for a User ──────────────────────────────────────────────
 export const getUserPayments = async (req, res) => {
-    try {
-        const { user_id } = req.params;
+  try {
+    const { user_id } = req.params;
 
-        // Always run cleanup first
-        await autoExpireAndReactivate(user_id);
+    // Always run cleanup first
+    await autoExpireAndReactivate(user_id);
 
-        const payments = await Payment.find({ user_id }).sort({ createdAt: -1 });
+    const payments = await Payment.find({ user_id }).sort({ createdAt: -1 });
 
-        const enriched = payments.map((p) => enrichPaymentObject(p.toObject()));
+    const enriched = payments.map((p) => enrichPaymentObject(p.toObject()));
 
-        return res.status(200).json({ success: true, data: enriched });
-    } catch (error) {
-        console.error("[getUserPayments] error:", error.message);
-        return res.status(500).json({ success: false, message: error.message });
-    }
+    return res.status(200).json({ success: true, data: enriched });
+  } catch (error) {
+    console.error("[getUserPayments] error:", error.message);
+    return res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 // ── Get Single Payment ───────────────────────────────────────────────────────
 export const getSinglePayment = async (req, res) => {
-    try {
-        const { transactionId } = req.params;
+  try {
+    const { transactionId } = req.params;
 
-        const payment = await Payment.findOne({ transactionId });
-        if (!payment) {
-            return res.status(404).json({ success: false, message: "Payment not found" });
-        }
-
-        await autoExpireAndReactivate(payment.user_id.toString());
-
-        // Re-fetch after potential expiry/reactivation mutations
-        const refreshed = await Payment.findOne({ transactionId });
-
-        return res.status(200).json({
-            success: true,
-            data: enrichPaymentObject(refreshed.toObject()),
-        });
-    } catch (error) {
-        console.error("[getSinglePayment] error:", error.message);
-        return res.status(500).json({ success: false, message: error.message });
+    const payment = await Payment.findOne({ transactionId });
+    if (!payment) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Payment not found" });
     }
+
+    await autoExpireAndReactivate(payment.user_id.toString());
+
+    // Re-fetch after potential expiry/reactivation mutations
+    const refreshed = await Payment.findOne({ transactionId });
+
+    return res.status(200).json({
+      success: true,
+      data: enrichPaymentObject(refreshed.toObject()),
+    });
+  } catch (error) {
+    console.error("[getSinglePayment] error:", error.message);
+    return res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 // ── Check Active Subscription ────────────────────────────────────────────────
-
-
 
 // export const checkActiveSubscription = async (req, res) => {
 //     try {
@@ -1964,7 +1989,7 @@ export const getSinglePayment = async (req, res) => {
 //                 useSubscriptionStatus: "Active",
 //                 plan: "Free Plan (Lifetime)",
 //                 message: "Lifetime free plan is active",
-                
+
 //                 subscriptionDetails: {
 //                     transactionId: activePayment.transactionId,
 //                     activatedAt: activePayment.reactivatedAt || activePayment.activatedAt || activePayment.createdAt,
@@ -2023,285 +2048,297 @@ export const getSinglePayment = async (req, res) => {
 // };
 
 export const checkActiveSubscription = async (req, res) => {
-    try {
-        const { user_id } = req.params;
+  try {
+    const { user_id } = req.params;
 
-        // Step 1: expire stale subs, reactivate paused ones if needed
-        await autoExpireAndReactivate(user_id);
+    // Step 1: expire stale subs, reactivate paused ones if needed
+    await autoExpireAndReactivate(user_id);
 
-        // Step 2: find active subscription
-        const now = new Date();
-        const activePayment = await Payment.findOne({
-            user_id,
-            status: "success",
-            useSubscriptionStatus: "Active",
-            planType: { $ne: "expir" },
-            $or: [
-                { planType: "free", SubSriptionMonths: 0 },
-                { planType: "free", expiryDate: { $gt: now } },
-                { planType: "paid", expiryDate: { $gt: now } },
-            ],
-        }).sort({ createdAt: -1 });
+    // Step 2: find active subscription
+    const now = new Date();
+    const activePayment = await Payment.findOne({
+      user_id,
+      status: "success",
+      useSubscriptionStatus: "Active",
+      planType: { $ne: "expir" },
+      $or: [
+        { planType: "free", SubSriptionMonths: 0 },
+        { planType: "free", expiryDate: { $gt: now } },
+        { planType: "paid", expiryDate: { $gt: now } },
+      ],
+    }).sort({ createdAt: -1 });
 
-        // ── No active subscription ────────────────────────────────────────────
-        if (!activePayment) {
-            const pausedPayment = await Payment.findOne({
-                user_id,
-                status: "success",
-                useSubscriptionStatus: "Paused",
-            }).sort({ pausedAt: -1 });
+    // ── No active subscription ────────────────────────────────────────────
+    if (!activePayment) {
+      const pausedPayment = await Payment.findOne({
+        user_id,
+        status: "success",
+        useSubscriptionStatus: "Paused",
+      }).sort({ pausedAt: -1 });
 
-            if (pausedPayment) {
-                const daysStored =
-                    pausedPayment.remainingDaysAtPause === -1
-                        ? "Lifetime"
-                        : pausedPayment.remainingDaysAtPause;
-
-                return res.status(200).json({
-                    success: true,
-                    hasActiveSubscription: false,
-                    useSubscriptionStatus: "Inactive",
-                    hasPausedSubscription: true,
-                    pausedPlan: {
-                        transactionId: pausedPayment.transactionId,
-                        planType: pausedPayment.planType,
-                        remainingDays: daysStored,
-                        pausedAt: pausedPayment.pausedAt,
-                        AdvancePayment: pausedPayment.AdvancePayment,   // ✅ added
-                        message:
-                            daysStored === "Lifetime"
-                                ? "Lifetime free plan will resume when current plan ends"
-                                : `${daysStored} days will resume when current plan ends`,
-                    },
-                    message: "No active subscription. A paused plan is waiting to resume.",
-                });
-            }
-
-            const lastPayment = await Payment.findOne({
-                user_id,
-                status: "success",
-            }).sort({ createdAt: -1 });
-
-            if (lastPayment?.planType === "expir") {
-                return res.status(200).json({
-                    success: true,
-                    hasActiveSubscription: false,
-                    planType: "expir",
-                    useSubscriptionStatus: "Inactive",
-                    message: "Your plan has expired. Please subscribe to continue.",
-                    expiredOn: lastPayment.expiryDate,
-                });
-            }
-
-            return res.status(200).json({
-                success: true,
-                hasActiveSubscription: false,
-                useSubscriptionStatus: "Inactive",
-                message: "No active subscription found",
-            });
-        }
-
-        // ── Lifetime free plan ────────────────────────────────────────────────
-        if (activePayment.planType === "free" && activePayment.SubSriptionMonths === 0) {
-            return res.status(200).json({
-                success: true,
-                hasActiveSubscription: true,
-                planType: "free",
-                useSubscriptionStatus: "Active",
-                plan: "Free Plan (Lifetime)",
-                message: "Lifetime free plan is active",
-                AdvancePayment: activePayment.AdvancePayment,           // ✅ added
-                subscriptionDetails: {
-                    transactionId: activePayment.transactionId,
-                    activatedAt: activePayment.reactivatedAt || activePayment.activatedAt || activePayment.createdAt,
-                    months: activePayment.SubSriptionMonths,
-                },
-            });
-        }
-
-        // ── Time-based plan (free 3-month or paid) ────────────────────────────
-        const daysRemaining = Math.ceil(
-            (new Date(activePayment.expiryDate) - now) / (1000 * 60 * 60 * 24)
-        );
-
-        const pausedPayment = await Payment.findOne({
-            user_id,
-            status: "success",
-            useSubscriptionStatus: "Paused",
-        }).sort({ pausedAt: -1 });
-
-        const queuedPlan = pausedPayment
-            ? {
-                transactionId: pausedPayment.transactionId,
-                planType: pausedPayment.planType,
-                remainingDays:
-                    pausedPayment.remainingDaysAtPause === -1
-                        ? "Lifetime"
-                        : pausedPayment.remainingDaysAtPause,
-                AdvancePayment: pausedPayment.AdvancePayment,           // ✅ added
-            }
-            : null;
+      if (pausedPayment) {
+        const daysStored =
+          pausedPayment.remainingDaysAtPause === -1
+            ? "Lifetime"
+            : pausedPayment.remainingDaysAtPause;
 
         return res.status(200).json({
-            success: true,
-            hasActiveSubscription: true,
-            planType: activePayment.planType,
-            useSubscriptionStatus: "Active",
-            plan:
-                activePayment.planType === "free"
-                    ? "Free Plan (3 Months)"
-                    : `Paid Plan (${activePayment.SubSriptionMonths} months)`,
-            expiryDate: activePayment.expiryDate,
-            daysRemaining,
-            message: `Subscription active for ${daysRemaining} more day(s)`,
-            AdvancePayment: activePayment.AdvancePayment,               // ✅ added
-            queuedPlan,
-            subscriptionDetails: {
-                transactionId: activePayment.transactionId,
-                amount: activePayment.amount,
-                activatedAt: activePayment.reactivatedAt || activePayment.activatedAt,
-                months: activePayment.SubSriptionMonths,
-            },
+          success: true,
+          hasActiveSubscription: false,
+          useSubscriptionStatus: "Inactive",
+          hasPausedSubscription: true,
+          pausedPlan: {
+            transactionId: pausedPayment.transactionId,
+            planType: pausedPayment.planType,
+            remainingDays: daysStored,
+            pausedAt: pausedPayment.pausedAt,
+            AdvancePayment: pausedPayment.AdvancePayment, // ✅ added
+            message:
+              daysStored === "Lifetime"
+                ? "Lifetime free plan will resume when current plan ends"
+                : `${daysStored} days will resume when current plan ends`,
+          },
+          message:
+            "No active subscription. A paused plan is waiting to resume.",
         });
-    } catch (error) {
-        console.error("[checkActiveSubscription] error:", error.message);
-        return res.status(500).json({ success: false, message: error.message });
-    }
-};
+      }
 
+      const lastPayment = await Payment.findOne({
+        user_id,
+        status: "success",
+      }).sort({ createdAt: -1 });
+
+      if (lastPayment?.planType === "expir") {
+        return res.status(200).json({
+          success: true,
+          hasActiveSubscription: false,
+          planType: "expir",
+          useSubscriptionStatus: "Inactive",
+          message: "Your plan has expired. Please subscribe to continue.",
+          expiredOn: lastPayment.expiryDate,
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        hasActiveSubscription: false,
+        useSubscriptionStatus: "Inactive",
+        message: "No active subscription found",
+      });
+    }
+
+    // ── Lifetime free plan ────────────────────────────────────────────────
+    if (
+      activePayment.planType === "free" &&
+      activePayment.SubSriptionMonths === 0
+    ) {
+      return res.status(200).json({
+        success: true,
+        hasActiveSubscription: true,
+        planType: "free",
+        useSubscriptionStatus: "Active",
+        plan: "Free Plan (Lifetime)",
+        message: "Lifetime free plan is active",
+        AdvancePayment: activePayment.AdvancePayment, // ✅ added
+        subscriptionDetails: {
+          transactionId: activePayment.transactionId,
+          activatedAt:
+            activePayment.reactivatedAt ||
+            activePayment.activatedAt ||
+            activePayment.createdAt,
+          months: activePayment.SubSriptionMonths,
+        },
+      });
+    }
+
+    // ── Time-based plan (free 3-month or paid) ────────────────────────────
+    const daysRemaining = Math.ceil(
+      (new Date(activePayment.expiryDate) - now) / (1000 * 60 * 60 * 24),
+    );
+
+    const pausedPayment = await Payment.findOne({
+      user_id,
+      status: "success",
+      useSubscriptionStatus: "Paused",
+    }).sort({ pausedAt: -1 });
+
+    const queuedPlan = pausedPayment
+      ? {
+          transactionId: pausedPayment.transactionId,
+          planType: pausedPayment.planType,
+          remainingDays:
+            pausedPayment.remainingDaysAtPause === -1
+              ? "Lifetime"
+              : pausedPayment.remainingDaysAtPause,
+          AdvancePayment: pausedPayment.AdvancePayment, // ✅ added
+        }
+      : null;
+
+    return res.status(200).json({
+      success: true,
+      hasActiveSubscription: true,
+      planType: activePayment.planType,
+      useSubscriptionStatus: "Active",
+      plan:
+        activePayment.planType === "free"
+          ? "Free Plan (3 Months)"
+          : `Paid Plan (${activePayment.SubSriptionMonths} months)`,
+      expiryDate: activePayment.expiryDate,
+      daysRemaining,
+      message: `Subscription active for ${daysRemaining} more day(s)`,
+      AdvancePayment: activePayment.AdvancePayment, // ✅ added
+      queuedPlan,
+      subscriptionDetails: {
+        transactionId: activePayment.transactionId,
+        amount: activePayment.amount,
+        activatedAt: activePayment.reactivatedAt || activePayment.activatedAt,
+        months: activePayment.SubSriptionMonths,
+      },
+    });
+  } catch (error) {
+    console.error("[checkActiveSubscription] error:", error.message);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
 
 // ── Subscription History ─────────────────────────────────────────────────────
 export const getSubscriptionHistory = async (req, res) => {
-    try {
-        const { user_id } = req.params;
+  try {
+    const { user_id } = req.params;
 
-        await autoExpireAndReactivate(user_id);
+    await autoExpireAndReactivate(user_id);
 
-        const payments = await Payment.find({
-            user_id,
-            status: "success",
-        }).sort({ createdAt: -1 });
+    const payments = await Payment.find({
+      user_id,
+      status: "success",
+    }).sort({ createdAt: -1 });
 
-        const now = new Date();
+    const now = new Date();
 
-        const totalMonths = payments.reduce((sum, p) => sum + p.SubSriptionMonths, 0);
-        const totalAmount = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+    const totalMonths = payments.reduce(
+      (sum, p) => sum + p.SubSriptionMonths,
+      0,
+    );
+    const totalAmount = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
 
-        const freePlans    = payments.filter((p) => p.planType === "free");
-        const paidPlans    = payments.filter((p) => p.planType === "paid");
-        const expiredPlans = payments.filter((p) => p.planType === "expir");
-        const pausedPlans  = payments.filter((p) => p.useSubscriptionStatus === "Paused");
+    const freePlans = payments.filter((p) => p.planType === "free");
+    const paidPlans = payments.filter((p) => p.planType === "paid");
+    const expiredPlans = payments.filter((p) => p.planType === "expir");
+    const pausedPlans = payments.filter(
+      (p) => p.useSubscriptionStatus === "Paused",
+    );
 
-        // Current active (paid takes priority over free)
-        const activePaidPlan = payments.find(
-            (p) =>
-                p.planType === "paid" &&
-                p.useSubscriptionStatus === "Active" &&
-                p.expiryDate &&
-                now < new Date(p.expiryDate)
-        );
-        const activeFreePlan = payments.find(
-            (p) =>
-                p.planType === "free" &&
-                p.useSubscriptionStatus === "Active" &&
-                (p.SubSriptionMonths === 0 ||
-                    (p.expiryDate && now < new Date(p.expiryDate)))
-        );
+    // Current active (paid takes priority over free)
+    const activePaidPlan = payments.find(
+      (p) =>
+        p.planType === "paid" &&
+        p.useSubscriptionStatus === "Active" &&
+        p.expiryDate &&
+        now < new Date(p.expiryDate),
+    );
+    const activeFreePlan = payments.find(
+      (p) =>
+        p.planType === "free" &&
+        p.useSubscriptionStatus === "Active" &&
+        (p.SubSriptionMonths === 0 ||
+          (p.expiryDate && now < new Date(p.expiryDate))),
+    );
 
-        const currentActiveSubscription = activePaidPlan || activeFreePlan || null;
+    const currentActiveSubscription = activePaidPlan || activeFreePlan || null;
 
-        // Most recently paused subscription (queued to resume)
-        const queuedSubscription = pausedPlans[0] || null;
+    // Most recently paused subscription (queued to resume)
+    const queuedSubscription = pausedPlans[0] || null;
 
-        const planLabel = (p) => {
-            if (p.planType === "expir")                                 return "Expired Plan";
-            if (p.planType === "free" && p.SubSriptionMonths === 0)     return "Free Plan (Lifetime)";
-            if (p.planType === "free")                                  return "Free Plan (3 months)";
-            return `Paid Plan (${p.SubSriptionMonths} months)`;
-        };
+    const planLabel = (p) => {
+      if (p.planType === "expir") return "Expired Plan";
+      if (p.planType === "free" && p.SubSriptionMonths === 0)
+        return "Free Plan (Lifetime)";
+      if (p.planType === "free") return "Free Plan (3 months)";
+      return `Paid Plan (${p.SubSriptionMonths} months)`;
+    };
 
-        return res.status(200).json({
-            success: true,
-            data: {
-                summary: {
-                    totalSubscriptions:    payments.length,
-                    totalMonthsSubscribed: totalMonths,
-                    totalAmountSpent:      totalAmount,
-                    freePlanCount:         freePlans.length,
-                    paidPlanCount:         paidPlans.length,
-                    expiredPlanCount:      expiredPlans.length,
-                    pausedPlanCount:       pausedPlans.length,
-                },
-                currentActiveSubscription: currentActiveSubscription
-                    ? {
-                        planType:             currentActiveSubscription.planType,
-                        useSubscriptionStatus:"Active",
-                        months:               currentActiveSubscription.SubSriptionMonths,
-                        expiryDate:           currentActiveSubscription.expiryDate,
-                        activatedAt:          currentActiveSubscription.reactivatedAt
-                                                || currentActiveSubscription.activatedAt,
-                        transactionId:        currentActiveSubscription.transactionId,
-                        planLabel:            planLabel(currentActiveSubscription),
-                    }
-                    : null,
-                queuedSubscription: queuedSubscription
-                    ? {
-                        planType:           queuedSubscription.planType,
-                        useSubscriptionStatus: "Paused",
-                        transactionId:      queuedSubscription.transactionId,
-                        remainingDays:
-                            queuedSubscription.remainingDaysAtPause === -1
-                                ? "Lifetime"
-                                : queuedSubscription.remainingDaysAtPause,
-                        pausedAt:           queuedSubscription.pausedAt,
-                        planLabel:          planLabel(queuedSubscription),
-                        message:
-                            queuedSubscription.remainingDaysAtPause === -1
-                                ? "Lifetime plan will resume after current plan ends"
-                                : `${queuedSubscription.remainingDaysAtPause} days will resume after current plan ends`,
-                    }
-                    : null,
-                history: payments.map((p) => ({
-                    ...enrichPaymentObject(p.toObject()),
-                    planLabel: planLabel(p),
-                })),
-            },
-        });
-    } catch (error) {
-        console.error("[getSubscriptionHistory] error:", error.message);
-        return res.status(500).json({ success: false, message: error.message });
-    }
+    return res.status(200).json({
+      success: true,
+      data: {
+        summary: {
+          totalSubscriptions: payments.length,
+          totalMonthsSubscribed: totalMonths,
+          totalAmountSpent: totalAmount,
+          freePlanCount: freePlans.length,
+          paidPlanCount: paidPlans.length,
+          expiredPlanCount: expiredPlans.length,
+          pausedPlanCount: pausedPlans.length,
+        },
+        currentActiveSubscription: currentActiveSubscription
+          ? {
+              planType: currentActiveSubscription.planType,
+              useSubscriptionStatus: "Active",
+              months: currentActiveSubscription.SubSriptionMonths,
+              expiryDate: currentActiveSubscription.expiryDate,
+              activatedAt:
+                currentActiveSubscription.reactivatedAt ||
+                currentActiveSubscription.activatedAt,
+              transactionId: currentActiveSubscription.transactionId,
+              planLabel: planLabel(currentActiveSubscription),
+            }
+          : null,
+        queuedSubscription: queuedSubscription
+          ? {
+              planType: queuedSubscription.planType,
+              useSubscriptionStatus: "Paused",
+              transactionId: queuedSubscription.transactionId,
+              remainingDays:
+                queuedSubscription.remainingDaysAtPause === -1
+                  ? "Lifetime"
+                  : queuedSubscription.remainingDaysAtPause,
+              pausedAt: queuedSubscription.pausedAt,
+              planLabel: planLabel(queuedSubscription),
+              message:
+                queuedSubscription.remainingDaysAtPause === -1
+                  ? "Lifetime plan will resume after current plan ends"
+                  : `${queuedSubscription.remainingDaysAtPause} days will resume after current plan ends`,
+            }
+          : null,
+        history: payments.map((p) => ({
+          ...enrichPaymentObject(p.toObject()),
+          planLabel: planLabel(p),
+        })),
+      },
+    });
+  } catch (error) {
+    console.error("[getSubscriptionHistory] error:", error.message);
+    return res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 // ── Delete Payment (Admin only) ──────────────────────────────────────────────
 export const deletePayment = async (req, res) => {
-    try {
-        const { id } = req.params;
+  try {
+    const { id } = req.params;
 
-        const deletedPayment = await Payment.findByIdAndDelete(id);
-        if (!deletedPayment) {
-            return res.status(404).json({ success: false, message: "Payment not found" });
-        }
-
-        // If the deleted payment was Active, try to restore a queued paused plan
-        if (deletedPayment.useSubscriptionStatus === "Active") {
-            await reactivatePausedSubscription(deletedPayment.user_id.toString());
-        }
-
-        return res.status(200).json({
-            success: true,
-            message: "Payment deleted successfully",
-            data: {
-                deletedId:             id,
-                planType:              deletedPayment.planType,
-                useSubscriptionStatus: deletedPayment.useSubscriptionStatus,
-            },
-        });
-    } catch (error) {
-        console.error("[deletePayment] error:", error.message);
-        return res.status(500).json({ success: false, message: error.message });
+    const deletedPayment = await Payment.findByIdAndDelete(id);
+    if (!deletedPayment) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Payment not found" });
     }
+
+    // If the deleted payment was Active, try to restore a queued paused plan
+    if (deletedPayment.useSubscriptionStatus === "Active") {
+      await reactivatePausedSubscription(deletedPayment.user_id.toString());
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Payment deleted successfully",
+      data: {
+        deletedId: id,
+        planType: deletedPayment.planType,
+        useSubscriptionStatus: deletedPayment.useSubscriptionStatus,
+      },
+    });
+  } catch (error) {
+    console.error("[deletePayment] error:", error.message);
+    return res.status(500).json({ success: false, message: error.message });
+  }
 };
-
-
-

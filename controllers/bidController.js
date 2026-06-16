@@ -2430,3 +2430,131 @@ export default {
   updatePaymentFields,
   getPaymentFields
 };
+
+
+
+
+export const getVendorBidHistory = async (req, res) => {
+  try {
+    const { vendorId } = req.params;
+
+    if (!vendorId) {
+      return res.status(400).json({
+        success: false,
+        message: "Vendor ID is required",
+      });
+    }
+
+    const bids = await Bid.aggregate([
+      {
+        $match: {
+          bidderId: vendorId,
+        },
+      },
+
+      // Job details
+      {
+        $lookup: {
+          from: "jobs",
+          localField: "jobId",
+          foreignField: "_id",
+          as: "jobData",
+        },
+      },
+
+      {
+        $unwind: {
+          path: "$jobData",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      // Final response
+      {
+        $project: {
+          _id: 1,
+          // ✅ ADD THESE
+          senderId: "$bidderId",
+          receiverId: "$recipientId",
+          bidId: "$_id",
+          quotation: 1,
+          status: 1,
+          activeStatus: 1,
+          ActiveUserStatus: 1,
+          validityOfQuote: 1,
+          advancePayment: 1,
+          noteToCustomer: 1,
+          createdAt: 1,
+
+          // Vendor
+          bidderId: 1,
+          vendorName: "$name",
+          vendorPhone: "$phone",
+          vendorImage: "$image",
+
+          // Customer
+          customerName: "$recipientDetails.name",
+          customerPhone: "$recipientDetails.phone",
+
+          // Job
+          jobId: "$jobData._id",
+          jobName: "$jobData.jobName",
+
+          pickup: "$jobData.pickup.city",
+          drop: "$jobData.drop.city",
+
+          pickupFullAddress: "$jobData.pickup.location",
+          dropFullAddress: "$jobData.drop.location",
+
+          moveType: "$jobData.moveType",
+
+          inventory: "$jobData.inventory",
+
+          jobStatus: "$jobData.jobDetails.status",
+
+          packingRequired: "$jobData.jobDetails.packingRequired",
+
+          dateOfPacking: "$jobData.jobDetails.dateOfPacking",
+        },
+      },
+
+      {
+        $sort: {
+          createdAt: -1,
+        },
+      },
+    ]);
+
+    // Stats
+    const totalBids = bids.length;
+
+    const totalQuotedAmount = bids.reduce(
+      (sum, item) => sum + Number(item.quotation || 0),
+      0,
+    );
+
+    const acceptedBids = bids.filter(
+      (item) => item.status === "Accepted",
+    ).length;
+
+    const negotiableBids = bids.filter(
+      (item) => item.status === "Negotiable",
+    ).length;
+
+    return res.status(200).json({
+      success: true,
+      totalBids,
+      totalQuotedAmount,
+      acceptedBids,
+      negotiableBids,
+      data: bids,
+    });
+  } catch (error) {
+    console.log("getVendorBidHistory error", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};

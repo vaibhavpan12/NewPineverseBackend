@@ -3137,6 +3137,148 @@ app.post("/clearAmountHistory", async (req, res) => {
     }
 });
 
+
+app.get("/getTransactionHistory", async (req, res) => {
+  try {
+    const { senderId, receiverId, bidId } = req.query;
+
+    console.log("📌 senderId =>", senderId);
+    console.log("📌 receiverId =>", receiverId);
+    console.log("📌 bidId =>", bidId);
+
+    // ✅ Validation
+    if (!senderId || !receiverId || !bidId) {
+      return res.status(400).json({
+        success: false,
+        message: "senderId, receiverId and bidId are required",
+      });
+    }
+
+    // ✅ Query
+    const query = {
+      $or: [
+        {
+          senderId: String(senderId),
+          receiverId: String(receiverId),
+        },
+        {
+          senderId: String(receiverId),
+          receiverId: String(senderId),
+        },
+      ],
+
+      "meta.bidId": String(bidId),
+    };
+
+    console.log("📌 Mongo Query =>", JSON.stringify(query, null, 2));
+
+    // ✅ Find messages
+    const messages = await Message.find(query).sort({
+      createdAt: -1,
+    });
+
+    console.log("📌 Total Messages Found =>", messages.length);
+
+    // ✅ No data
+    if (!messages.length) {
+      return res.status(200).json({
+        success: true,
+        totalTransactions: 0,
+        totalPaidAmount: 0,
+        latestAmount: 0,
+        latestTransaction: null,
+        transactionHistory: [],
+      });
+    }
+
+    // ✅ Filter transaction messages
+    const transactionMessages = messages.filter(
+      (msg) =>
+        Number(msg.negotiateAmount) > 0 ||
+        Number(msg.getCurrentAmount) > 0 ||
+        msg.activeStatus === "accept" ||
+        msg.paymentStatus === "paid",
+    );
+
+    console.log("📌 Transaction Messages =>", transactionMessages.length);
+
+    // ✅ Create history
+    const transactionHistory = transactionMessages.map((msg) => {
+      const amount =
+        Number(msg.negotiateAmount) || Number(msg.getCurrentAmount) || 0;
+
+      return {
+        _id: msg._id,
+
+        senderId: msg.senderId,
+        receiverId: msg.receiverId,
+
+        text: msg.text || "",
+
+        activeStatus: msg.activeStatus || "pending",
+
+        paymentStatus: msg.paymentStatus || "pending",
+
+        amount,
+
+        negotiateAmount: Number(msg.negotiateAmount) || 0,
+
+        currentAmount: Number(msg.getCurrentAmount) || 0,
+
+        bidId: msg?.meta?.bidId || null,
+
+        jobId: msg?.meta?.jobId || null,
+
+        type: msg.senderId === senderId ? "sent" : "received",
+
+        status: msg.paymentStatus || "pending",
+
+        description: msg.text || "Transaction",
+
+        transactionId: msg.transactionId || `TXN_${msg._id}`,
+
+        paymentMode: msg.paymentMode || "online",
+
+        createdAt: msg.createdAt,
+      };
+    });
+
+    // ✅ Latest
+    const latestTransaction = transactionHistory[0] || null;
+
+    const latestAmount = latestTransaction?.amount || 0;
+
+    // ✅ Total
+    const totalPaidAmount = transactionHistory.reduce(
+      (sum, item) => sum + Number(item.amount || 0),
+      0,
+    );
+
+    console.log("📌 Total Paid Amount =>", totalPaidAmount);
+
+    // ✅ Response
+    return res.status(200).json({
+      success: true,
+
+      totalTransactions: transactionHistory.length,
+
+      totalPaidAmount,
+
+      latestAmount,
+
+      latestTransaction,
+
+      transactionHistory,
+    });
+  } catch (error) {
+    console.log("❌ getTransactionHistory error =>", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
 // ========== ADD THIS INSIDE io.on('connection', (socket) => { ... }) ==========
 // Place this AFTER the existing socket.on('mark_as_read', ...) block and BEFORE socket.on('disconnect', ...)
 

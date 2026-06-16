@@ -11,7 +11,8 @@ import {
     getBidsByRecipient,
     deleteBid,
     updatePaymentFields,
-    getPaymentFields
+    getPaymentFields,
+    getVendorBidHistory
 } from "../controllers/bidController.js";
 
 const router = express.Router();
@@ -43,6 +44,8 @@ router.patch("/:bidId/active-user-status", updateActiveUserStatus);
 router.delete("/:bidId/delete", deleteBid)
 
 router.patch("/updatePaymentFields/:bidId", updatePaymentFields);  // PATCH - partial update
-router.get("/getPaymentFields/:bidId", getPaymentFields);       // GET - fetch payments
+router.get("/getPaymentFields/:bidId", getPaymentFields);    
+router.get("/vendor-bid-history/:vendorId", getVendorBidHistory);
+   // GET - fetch payments
 
 export default router;
