@@ -14,6 +14,7 @@ import {
   updateRescheduleStatus,
   getRescheduleDetails,
   addServiceRequestId,
+  getAllJobs
 
 } from "../controllers/locationController.js";
 
@@ -46,5 +47,6 @@ router.post("/requestReschedule", requestReschedule);
 router.put("/updateRescheduleStatus/:locationId", updateRescheduleStatus);
 
 router.get("/getRescheduleDetails", getRescheduleDetails);
+router.get("/getAllJobs", getAllJobs);
 
 export default router;
