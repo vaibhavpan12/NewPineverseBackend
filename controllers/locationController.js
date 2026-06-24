@@ -2304,6 +2304,53 @@ export const getLocations = async (req, res) => {
 };
 
 
+
+
+
+
+export const getAllJobs = async (req, res) => {
+  try {
+    const locations = await Location.find()
+      .sort({ createdAt: -1 });
+
+    const locationsWithBidCount = await Promise.all(
+      locations.map(async (loc) => {
+        const bids = await Bid.find({ jobId: loc._id });
+
+        const bidCount = bids.length;
+
+        const bidUserIds = [
+          ...new Set(
+            bids
+              .map((bid) => bid.bidderId?.toString())
+              .filter(Boolean)
+          ),
+        ];
+
+        return {
+          ...loc._doc,
+          bidCount,
+          bidUserIds,
+        };
+      })
+    );
+
+    const total = await Location.countDocuments();
+
+    res.status(200).json({
+      success: true,
+      count: locationsWithBidCount.length,
+      total,
+      data: locationsWithBidCount,
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
 // ============================================================
 // GET LOCATION BY ID
 // ============================================================
