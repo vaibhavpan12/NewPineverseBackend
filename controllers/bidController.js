@@ -2,7 +2,9 @@
 import Bid from "../models/BidSchema.js";
 import mongoose from "mongoose";
 import Location from "../models/locationModel.js";
-import Status from "../models/Statusmodel.js";
+// import Status from "../models/Statusmodel.js";
+
+import Statusmodel from "../models/Statusmodel.js";
 
 import { sendNotificationToUsers } from "../services/pushNotificationService.js";
 
@@ -1055,13 +1057,45 @@ export const getBidsForUser = async (req, res) => {
 
 
 // 🟢 Get bids received by a recipient
-export const getBidsByRecipient = async (req, res) => {
-  try {
-    const { recipientId } = req.query;
-    if (!recipientId) {
+// export const getBidsByRecipient = async (req, res) => {
+//   try {
+//     const { recipientId } = req.query;
+//     if (!recipientId) {
+//       return res.status(400).json({
+//         message: "recipientId is required",
+//         success: false
+//       });
+//     }
+
+//     const bids = await Bid.find({ recipientId })
+//       .sort({ createdAt: -1 })
+//       .lean();
+
+//     console.log(`📊 Found ${bids.length} bids for recipient ${recipientId}`);
+
+//     const validBids = bids.filter(isBidValid);
+
+//     return res.status(200).json({
+//       message: "Active bids fetched successfully for recipient",
+//       success: true,
+//       recipientId,
+//       count: validBids.length,
+//       totalBids: bids.length,
+//       bids: validBids,
+//     });
+//   } catch (error) {
+//     console.error("❌ Error fetching bids by recipientId:", error);
+//     return res.status(500).json({
+//       message: "Server error",
+//       success: false,
+//       error: error.message
+//     });
+//   }
+// };
+recipientId) {
       return res.status(400).json({
         message: "recipientId is required",
-        success: false
+        success: false,
       });
     }
 
@@ -1073,6 +1107,15 @@ export const getBidsByRecipient = async (req, res) => {
 
     const validBids = bids.filter(isBidValid);
 
+    // ✅ StatusModel ka poora response
+    const statusResponse = await Statusmodel.find({
+      JobId: {
+        $in: validBids
+          .map((bid) => bid.jobId?.toString())
+          .filter(Boolean),
+      },
+    }).lean();
+
     return res.status(200).json({
       message: "Active bids fetched successfully for recipient",
       success: true,
@@ -1080,16 +1123,19 @@ export const getBidsByRecipient = async (req, res) => {
       count: validBids.length,
       totalBids: bids.length,
       bids: validBids,
+      statusResponse, // 👈 Added only this
     });
   } catch (error) {
     console.error("❌ Error fetching bids by recipientId:", error);
+
     return res.status(500).json({
       message: "Server error",
       success: false,
-      error: error.message
+      error: error.message,
     });
   }
 };
+
 
 // 🟢 Update bid status
 export const updateBidStatus = async (req, res) => {
