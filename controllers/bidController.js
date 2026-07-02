@@ -1092,7 +1092,11 @@ export const getBidsForUser = async (req, res) => {
 //     });
 //   }
 // };
-recipientId) {
+export const getBidsByRecipient = async (req, res) => {
+  try {
+    const { recipientId } = req.query;
+
+    if (!recipientId) {
       return res.status(400).json({
         message: "recipientId is required",
         success: false,
